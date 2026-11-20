@@ -86,6 +86,20 @@ describe('ReportFile', function() {
     });
   });
 
+  describe('sanitizeLauncherName', function() {
+    it('makes launcher names safe for file names', function() {
+      expect(ReportFile.sanitizeLauncherName('IE 11')).to.equal('IE_11');
+      expect(ReportFile.sanitizeLauncherName('Firefox (nightly)')).to.equal('Firefox__nightly_');
+      expect(ReportFile.sanitizeLauncherName(null)).to.equal('unknown');
+      expect(ReportFile.sanitizeLauncherName(undefined)).to.equal('unknown');
+    });
+
+    it('is used when expanding {launcher}', function() {
+      expect(ReportFile.expandPath('out/{launcher}.xml', { launcher: 'Firefox (nightly)' })).to.equal('out/Firefox__nightly_.xml');
+      expect(ReportFile.expandPath('out/{launcher}.xml', { launcher: 'IE 11' })).to.equal('out/IE_11.xml');
+    });
+  });
+
   describe('template detection', function() {
     it('hasLauncherTemplate', function() {
       expect(ReportFile.hasLauncherTemplate('out/{launcher}.xml')).to.be.true();
