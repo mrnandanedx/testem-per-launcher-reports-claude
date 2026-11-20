@@ -379,4 +379,135 @@ describe('Reporter', function() {
       expect(reporter.hasTests()).to.be.true();
     });
   });
+  describe('per-launcher report files', function() {
+    const path = require('path');
+    const tmpDirAsync = Bluebird.promisify(tmp.dir);
+    let dir;
+
+    function launcherApp(reporterName, extra) {
+      return {
+        config: {
+          get: function(key) {
+            if (key === 'reporter') {
+              return reporterName;
+            }
+            return extra && extra[key];
+          }
+        }
+      };
+    }
+
+    beforeEach(function() {
+      return tmpDirAsync({ unsafeCleanup: true }).then(d => {
+        dir = d;
+      });
+    });
+
+    afterEach(function() {
+      fs.rmSync(dir, { recursive: true, force: true });
+    });
+
+    it('writes one file per launcher', function() {
+      let reporter = new Reporter(launcherApp('tap'), stream, path.join(dir, 'out', '{launcher}.tap'));
+
+      reporter.onStart('Chrome', { launcherId: 1 });
+      reporter.onStart('Firefox', { launcherId: 2 });
+      reporter.report('Chrome', { name: 'chrome test', passed: true, logs: [] });
+      reporter.report('Firefox', { name: 'firefox test', passed: true, logs: [] });
+      reporter.onEnd('Chrome', { launcherId: 1 });
+      reporter.onEnd('Firefox', { launcherId: 2 });
+
+      expect(reporter.reportFile).to.be.undefined();
+
+      return reporter.close().then(function() {
+        let chrome = fs.readFileSync(path.join(dir, 'out', 'Chrome.tap'), 'utf8');
+        let firefox = fs.readFileSync(path.join(dir, 'out', 'Firefox.tap'), 'utf8');
+
+        expect(chrome).to.contain('chrome test');
+        expect(chrome).to.not.contain('firefox test');
+        expect(firefox).to.contain('firefox test');
+        expect(firefox).to.not.contain('chrome test');
+      });
+    });
+
+    it('still reports every launcher to stdout', function() {
+      let output = '';
+      stream.on('data', chunk => {
+        output += chunk;
+      });
+      let reporter = new Reporter(launcherApp('tap'), stream, path.join(dir, '{launcher}.tap'));
+
+      reporter.report('Chrome', { name: 'chrome test', passed: true, logs: [] });
+      reporter.report('Firefox', { name: 'firefox test', passed: true, logs: [] });
+
+      return reporter.close().then(function() {
+        expect(output).to.contain('chrome test');
+        expect(output).to.contain('firefox test');
+      });
+    });
+
+    it('does not create files for launchers that only start and end', function() {
+      let reporter = new Reporter(launcherApp('tap'), stream, path.join(dir, '{launcher}.tap'));
+
+      reporter.onStart('testem', { launcherId: 0 });
+      reporter.onEnd('testem', { launcherId: 0 });
+      reporter.report('Chrome', { name: 'chrome test', passed: true, logs: [] });
+
+      return reporter.close().then(function() {
+        expect(fs.readdirSync(dir)).to.deep.equal(['Chrome.tap']);
+      });
+    });
+
+    it('replays onStart to the file reporter once the launcher reports', function() {
+      let starts = [];
+      function StartRecorder() {}
+      StartRecorder.prototype.report = function() {};
+      StartRecorder.prototype.onStart = function(name, data) {
+        starts.push([name, data]);
+      };
+
+      let reporter = new Reporter(launcherApp(StartRecorder), stream, path.join(dir, '{launcher}.txt'));
+      reporter.onStart('Chrome', { launcherId: 1 });
+      expect(starts).to.deep.equal([['Chrome', { launcherId: 1 }]]); // stdout reporter
+
+      reporter.report('Chrome', { name: 'a', passed: true });
+      expect(starts).to.deep.equal([['Chrome', { launcherId: 1 }], ['Chrome', { launcherId: 1 }]]);
+
+      return reporter.close();
+    });
+
+    it('expands {date} and {timestamp} the same way for all launchers', function() {
+      let reporter = new Reporter(launcherApp('tap'), stream, path.join(dir, '{timestamp}-{launcher}.tap'));
+
+      reporter.report('Chrome', { name: 'a', passed: true, logs: [] });
+      reporter.report('Firefox', { name: 'b', passed: true, logs: [] });
+
+      return reporter.close().then(function() {
+        let files = fs.readdirSync(dir).sort();
+        expect(files).to.have.length(2);
+        expect(files[0].replace('-Chrome.tap', '')).to.equal(files[1].replace('-Firefox.tap', ''));
+        expect(files[0]).to.match(/^\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}-Chrome\.tap$/);
+      });
+    });
+
+    it('writes errors without a launcher to a testem file when no launcher has reported', function() {
+      return Bluebird.using(Reporter.with(launcherApp('tap'), stream, path.join(dir, '{launcher}.tap')), function() {
+        return Bluebird.reject(new Error('Tests failed.'));
+      }).catch(function() {
+        expect(fs.readFileSync(path.join(dir, 'testem.tap'), 'utf8')).to.contain('Tests failed.');
+      });
+    });
+
+    it('uses the xunit reporter per launcher with xunit_intermediate_output', function() {
+      let reporter = new Reporter(launcherApp('xunit', { xunit_intermediate_output: true }), stream, path.join(dir, '{launcher}.xml'));
+
+      reporter.report('Chrome', { name: 'chrome test', passed: true, logs: [] });
+
+      return reporter.close().then(function() {
+        let xml = fs.readFileSync(path.join(dir, 'Chrome.xml'), 'utf8');
+        expect(xml).to.contain('<testsuite');
+        expect(xml).to.contain('chrome test');
+      });
+    });
+  });
 });
