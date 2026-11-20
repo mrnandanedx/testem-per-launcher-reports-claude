@@ -690,6 +690,32 @@ describe('Reporter', function() {
       });
     });
 
+    it('xunit: each file names its launcher when launcher properties are on', function() {
+      let app = {
+        config: {
+          get: key => ({ reporter: 'xunit', xunit_include_launcher_properties: true })[key]
+        }
+      };
+      let reporter = new Reporter(app, stream, path.join(dir, '{launcher}.xml'));
+      runSuite(reporter);
+
+      return reporter.close().then(function() {
+        let chrome = read('Chrome.xml');
+        expect(chrome).to.contain('<property name="launcher" value="Chrome"/>');
+        expect(chrome).to.contain('<property name="Chrome.pass" value="1"/>');
+        expect(chrome).to.contain('<property name="Chrome.fail" value="1"/>');
+        expect(chrome).to.not.contain('Firefox');
+
+        let firefox = read('Firefox.xml');
+        expect(firefox).to.contain('<property name="launcher" value="Firefox"/>');
+        expect(firefox).to.contain('<property name="launchers" value="Firefox"/>');
+
+        // the combined stdout report has no single launcher
+        expect(output).to.not.contain('name="launcher"');
+        expect(output).to.contain('<property name="launchers" value="Chrome,Firefox,testem"/>');
+      });
+    });
+
     it('finish is safe to call more than once', function() {
       let reporter = new Reporter(appWith('tap'), stream, path.join(dir, '{launcher}.tap'));
       runSuite(reporter);

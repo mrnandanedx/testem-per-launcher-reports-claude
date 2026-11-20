@@ -109,12 +109,14 @@ Chrome, Chrome Canary, Chromium, Firefox, IE, Opera, PhantomJS, Safari, Safari T
     stdout_stream                [Stream]  the stdout stream to use (defaults to `process.stdout`)
     tap_failed_tests_only        [Boolean] log only failed tests (`not ok`) in TAP reporting
     tap_quiet_logs               [Boolean] whether to suppress non-failing console logs (_not_ pass/fail info) in TAP reporting
+    tap_show_launcher_summary    [Boolean] print a per-launcher summary line ("# Chrome: 3 tests, 1 pass, 1 fail, 1 skip") after the TAP summary (false)
     timeout:                     [Number]  timeout for a browser
     unsafe_file_serving:         [Boolean] allow serving directories that are not in your CWD (false)
     url:                         [String]  url server runs at (http://{host}:{port}/)
     user_data_dir:               [String]  directory to initialize the browser user data directories (default a temporary directory)
     watch_files:                 [Array]   string or array list of files or file patterns to watch changes of (defaults to `src_files`)
     xunit_exclude_stack:         [Boolean] whether to exclude stack traces in xunit reporter
+    xunit_include_launcher_properties [Boolean] add a <properties> element with the launchers and per-launcher pass/fail counts to the xunit report (false)
     xunit_intermediate_output    [Boolean] print tap output for the xunit reporter (false)
 
 ### HTTPS:
